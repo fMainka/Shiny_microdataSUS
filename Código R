@@ -1,0 +1,66 @@
+# 1° passo: Instalar o pacote microdatasus a partir do github
+### install.packages("remotes") #Comando utilizado para instalar pacotes fora do Cran-R
+### remotes::install_github("rfsaldanha/microdatasus", force = TRUE) #Local onde o R vai buscar o pacote microdatasus
+
+# 2° passo: Instalar e carregar pacotes
+
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("microdatasus")) install.packages("microdatasus")
+if (!require("writexl")) install.packages("writexl")
+if (!require("shiny")) install.packages("shiny")
+
+ui <- fluidPage(
+  titlePanel("Consulta de Dados - Microdatasus"),
+  sidebarLayout(
+    sidebarPanel(
+      numericInput("year_start", "Ano inicial:", 2023, min = 1990, max = Inf),
+      numericInput("year_end", "Ano final:", 2024, min = 1990, max = Inf),
+      numericInput("month_start", "Mês inicial:", 6, min = 1, max = 12),
+      numericInput("month_end", "Mês final:", 6, min = 1, max = 12),
+      selectInput("uf", "Estado (UF):", choices = c("all","AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO")),
+      selectInput("information_system", "Sistema de Informação:", 
+                  choices = c("SIH-RD", "SIH-RJ", "SIH-SP", "SIH-ER", "SIM-DO", "SIM-DOFET", "SIM-DOEXT", "SIM-DOINF", "SIM-DOMAT", "SINASC", "CNES-LT", "CNES-ST", "CNES-DC", "CNES-EQ", "CNES-SR", "CNES-HB", "CNES-PF", "CNES-EP", "CNES-RC", "CNES-IN", "CNES-EE", "CNES-EF", "CNES-GM", "SIA-AB", "SIA-ABO", "SIA-ACF", "SIA-AD", "SIA-AN", "SIA-AM", "SIA-AQ", "SIA-AR", "SIA-ATD", "SIA-PA", "SIA-PS", "SIA-SAD", "SINAN-DENGUE", "SINAN-CHIKUNGUNYA", "SINAN-ZIKA", "SINAN-MALARIA", "SINAN-CHAGAS", "SINAN-LEISHMANIOSE-VISCERAL", "SINAN-LEISHMANIOSE-TEGUMENTAR", "SINAN-LEPTOSPIROSE")),
+      textInput("CID", "Informe o CID"),
+      actionButton("fetch", "Baixar Dados"),
+      downloadButton("downloadData", "Baixar Excel")
+    ),
+    mainPanel(
+      tableOutput("table")
+    )
+  )
+)
+
+server <- function(input, output) {
+  dados <- reactiveVal()
+  
+  observeEvent(input$fetch, {
+    showNotification("Baixando dados...", type = "message")
+    df <- fetch_datasus(
+      year_start = input$year_start,
+      year_end = input$year_end,
+      month_start = input$month_start,
+      month_end = input$month_end,
+      information_system = input$information_system,
+      uf = input$uf
+    )
+    df_filtrado <- filter(df, DIAG_PRINC %in% (input$CID))
+    dados(df_filtrado)
+    showNotification("Download concluído!", type = "message")
+  })
+  
+  output$table <- renderTable({
+    req(dados())
+    head(dados())
+  })
+  
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("DataSuS", input$year, ".xlsx", sep = "")
+    },
+    content = function(file) {
+      write_xlsx(dados(), file)
+    }
+  )
+}
+
+shinyApp(ui, server)
